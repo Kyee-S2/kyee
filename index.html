@@ -21,8 +21,6 @@ a:hover{text-decoration:underline}
   background:
     radial-gradient(circle at 78% 12%,#fff 0,rgba(255,255,255,.9) 3%,rgba(255,255,255,0) 22%),
     linear-gradient(#1a8fd8 0%,#5fcdf6 45%,#c9f1ff 72%,#e9fbff 100%)}
-.wallpaper::after{content:"";position:absolute;left:-20%;right:-20%;bottom:-38vh;height:60vh;
-  border-radius:50% 50% 0 0;background:radial-gradient(ellipse at 50% 0,var(--leaf),var(--grass) 60%,#1c6b1a)}
 /* Para GIF: troque o background por  background:url(wallpaper.gif) center/cover;
    Para MP4: descomente o <video> no HTML. */
 .wallpaper video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
@@ -168,7 +166,7 @@ footer{margin-top:22px;text-align:center;color:#05304d;text-shadow:0 1px 0 rgba(
       <p class="real sub">Pedro · Rio de Janeiro, Brasil</p>
       <p class="summary">Sou um furry carioca e artista musical iniciante!<br>Guitarrista!!<br>Estudante de tempo integral na Firjan...<br>Alguns links logo abaixo! &gt;:3c</p>
       <a class="btn" href="#links">Ver links</a>
-      <a class="btn green" href="mailto:voce@email.com">Enviar mensagem</a>
+      <a class="btn green" href="#mural">Enviar mensagem</a>
     </div>
 
     <div class="side">
@@ -193,7 +191,7 @@ footer{margin-top:22px;text-align:center;color:#05304d;text-shadow:0 1px 0 rgba(
         </div>
       </section>
 
-      <section class="card glass">
+      <section class="card glass" id="mural">
         <h2>Mural de comentários</h2>
         <div id="clist">
           <div class="comment"><img src="foto.jpg" alt=""><div><b>Kyee</b> <small class="sub">6 de nov</small><p>Deixe uma mensagem, ou sei lá :p</p></div></div>
@@ -230,6 +228,7 @@ footer{margin-top:22px;text-align:center;color:#05304d;text-shadow:0 1px 0 rgba(
         <h2>Amigos</h2>
         <div class="friends">
           <a class="friend" href="#"><img src="matt.jpg" alt="">Matt</a>
+          <a class="friend" href="#"><img src="lili.jpg" alt="">Lili</a>
         </div>
       </section>
 
@@ -289,7 +288,7 @@ document.addEventListener('mouseover',function(e){
 });
 
 // mural de comentários (Supabase). Preencha as duas linhas abaixo depois de criar o projeto.
-var SB_URL='',SB_KEY='';
+var SB_URL='https://aulhsibygpjpbmtozdjy.supabase.co',SB_KEY='sb_publishable_DIoMM-yBRyI3LB-89E8EBw_enXqF-_a';
 var AVATAR='avatar.webp'; // ícone dos comentários dos visitantes (o seu comentário fixo usa foto.jpg)
 var clist=document.getElementById('clist'),cn=document.getElementById('cn'),cm=document.getElementById('cm'),
     cs=document.getElementById('cs'),csend=document.getElementById('csend'),hp=document.getElementById('hp');
