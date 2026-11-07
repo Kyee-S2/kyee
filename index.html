@@ -24,6 +24,8 @@ a:hover{text-decoration:underline}
 /* Para GIF: troque o background por  background:url(wallpaper.gif) center/cover;
    Para MP4: descomente o <video> no HTML. */
 .wallpaper video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.wallpaper canvas{position:absolute;inset:0;width:100%;height:100%;opacity:0;transition:opacity .8s}
+.wallpaper canvas.on{opacity:1}
 .bubble{position:absolute;bottom:-120px;border-radius:50%;pointer-events:none;
   background:radial-gradient(circle at 30% 28%,rgba(255,255,255,.95),rgba(255,255,255,.25) 35%,rgba(120,220,255,.15) 70%);
   box-shadow:inset 0 0 12px rgba(255,255,255,.7),0 0 10px rgba(255,255,255,.35);
@@ -229,6 +231,7 @@ footer{margin-top:22px;text-align:center;color:#05304d;text-shadow:0 1px 0 rgba(
         <div class="friends">
           <a class="friend" href="#"><img src="matt.jpg" alt="">Matt</a>
           <a class="friend" href="#"><img src="lili.jpg" alt="">Lili</a>
+          <a class="friend" href="#"><img src="ramon.jpg" alt="">Ramon</a>
         </div>
       </section>
 
@@ -324,6 +327,62 @@ csend.addEventListener('click',function(){
   }).catch(function(){cs.textContent='Não deu certo, tente de novo mais tarde.'})
     .then(function(){csend.disabled=false});
 });
+</script>
+<script>
+// distorção suave do papel de parede que segue o mouse (ou o toque) e volta ao normal devagar
+(function(){
+  var v=document.querySelector('.wallpaper video');
+  if(!v||(window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches))return;
+  var c=document.createElement('canvas'),gl=c.getContext('webgl',{alpha:false,antialias:false});
+  if(!gl)return;
+  var N=32,DECAY=0.985,GAIN=0.15,STEP=0.015;
+  function sh(t,src){var o=gl.createShader(t);gl.shaderSource(o,src);gl.compileShader(o);return o}
+  var pr=gl.createProgram();
+  gl.attachShader(pr,sh(gl.VERTEX_SHADER,'attribute vec2 a;varying vec2 uv;void main(){uv=a*.5+.5;gl_Position=vec4(a,0.,1.);}'));
+  gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,'precision mediump float;varying vec2 uv;uniform sampler2D t;uniform vec2 sc;uniform float asp;uniform vec4 P['+N+'];'+
+    'void main(){vec2 off=vec2(0.);for(int i=0;i<'+N+';i++){vec2 d=uv-P[i].xy;d.x*=asp;off+=P[i].zw*exp(-dot(d,d)*40.);}'+
+    'off/=1.+12.*length(off);vec2 q=(uv-off-.5)*sc+.5;gl_FragColor=texture2D(t,q);}'));
+  gl.linkProgram(pr);if(!gl.getProgramParameter(pr,gl.LINK_STATUS))return;
+  gl.useProgram(pr);
+  var b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+  var loc=gl.getAttribLocation(pr,'a');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+  var tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  [[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE],[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR]].forEach(function(x){gl.texParameteri(gl.TEXTURE_2D,x[0],x[1])});
+  var uP=gl.getUniformLocation(pr,'P'),uSc=gl.getUniformLocation(pr,'sc'),uA=gl.getUniformLocation(pr,'asp');
+  v.parentNode.insertBefore(c,v.nextSibling);
+  var pts=[],buf=new Float32Array(N*4),last=null,lastT=-1,prev=performance.now(),shown=false,dead=false;
+  function size(){var w=Math.min(innerWidth,1280),k=w/innerWidth;c.width=Math.round(innerWidth*k);c.height=Math.round(innerHeight*k);gl.viewport(0,0,c.width,c.height)}
+  size();addEventListener('resize',size);
+  function move(x,y){
+    var u=x/innerWidth,w=1-y/innerHeight;
+    if(!last){last={x:u,y:w};return}
+    var dx=u-last.x,dy=w-last.y;
+    if(Math.hypot(dx*innerWidth/innerHeight,dy)<STEP)return;
+    pts.push({x:u,y:w,vx:dx*GAIN,vy:dy*GAIN});if(pts.length>N)pts.shift();
+    last={x:u,y:w};
+  }
+  addEventListener('mousemove',function(e){move(e.clientX,e.clientY)},{passive:true});
+  addEventListener('touchstart',function(e){var t=e.touches[0];last={x:t.clientX/innerWidth,y:1-t.clientY/innerHeight}},{passive:true});
+  addEventListener('touchmove',function(e){var t=e.touches[0];move(t.clientX,t.clientY)},{passive:true});
+  function frame(now){
+    if(dead)return;requestAnimationFrame(frame);
+    var k=Math.pow(DECAY,(now-prev)/16.67);prev=now;
+    pts.forEach(function(p){p.vx*=k;p.vy*=k});
+    pts=pts.filter(function(p){return Math.abs(p.vx)+Math.abs(p.vy)>0.00002});
+    if(v.readyState<2)return;
+    try{
+      if(v.currentTime!==lastT){lastT=v.currentTime;gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,v)}
+      buf.fill(0);pts.forEach(function(p,i){buf.set([p.x,p.y,p.vx,p.vy],i*4)});
+      var va=c.width/c.height,vb=(v.videoWidth||16)/(v.videoHeight||9);
+      gl.uniform4fv(uP,buf);gl.uniform1f(uA,va);
+      gl.uniform2f(uSc,va>vb?1:va/vb,va>vb?vb/va:1);
+      gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+    }catch(err){dead=true;c.remove();return}
+    if(!shown){shown=true;c.classList.add('on')}
+  }
+  requestAnimationFrame(frame);
+})();
 </script>
 </body>
 </html>
