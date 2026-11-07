@@ -329,19 +329,27 @@ csend.addEventListener('click',function(){
 });
 </script>
 <script>
-// distorção suave do papel de parede que segue o mouse (ou o toque) e volta ao normal devagar
+// ondas de água no papel de parede: círculos que se espalham por onde o mouse (ou o dedo) passa
 (function(){
   var v=document.querySelector('.wallpaper video');
   if(!v||(window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches))return;
   var c=document.createElement('canvas'),gl=c.getContext('webgl',{alpha:false,antialias:false});
   if(!gl)return;
-  var N=32,DECAY=0.985,GAIN=0.15,STEP=0.015;
+  var N=Math.min(40,gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS)-6);if(N<10)return;
+  var LIFE=2.6,STEP=0.05,GAP=55;
   function sh(t,src){var o=gl.createShader(t);gl.shaderSource(o,src);gl.compileShader(o);return o}
   var pr=gl.createProgram();
   gl.attachShader(pr,sh(gl.VERTEX_SHADER,'attribute vec2 a;varying vec2 uv;void main(){uv=a*.5+.5;gl_Position=vec4(a,0.,1.);}'));
-  gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,'precision mediump float;varying vec2 uv;uniform sampler2D t;uniform vec2 sc;uniform float asp;uniform vec4 P['+N+'];'+
-    'void main(){vec2 off=vec2(0.);for(int i=0;i<'+N+';i++){vec2 d=uv-P[i].xy;d.x*=asp;off+=P[i].zw*exp(-dot(d,d)*40.);}'+
-    'off/=1.+12.*length(off);vec2 q=(uv-off-.5)*sc+.5;gl_FragColor=texture2D(t,q);}'));
+  gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,'precision mediump float;varying vec2 uv;uniform sampler2D t;uniform vec2 sc;uniform float asp;uniform vec4 R['+N+'];'+
+    'void main(){vec2 g=vec2(0.);'+
+    'for(int i=0;i<'+N+';i++){float am=R[i].w;if(am<=0.)continue;'+
+      'vec2 d=uv-R[i].xy;d.x*=asp;float l=length(d)+.0001;float r=R[i].z*.34;float x=l-r;'+
+      'float env=exp(-x*x/.0045);float ph=x*62.;'+
+      'float life=1.-R[i].z/'+LIFE.toFixed(2)+';life*=life;float att=1./(1.+r*5.);'+
+      'g+=(d/l)*am*life*att*env*(62.*cos(ph)-2.*x/.0045*sin(ph));}'+
+    'vec2 off=g*.00026;off.x/=asp;'+
+    'vec3 col=texture2D(t,(uv-off-.5)*sc+.5).rgb;'+
+    'col+=clamp(dot(g,vec2(-.6,.8))*.006,-.25,.3);gl_FragColor=vec4(col,1.);}'));
   gl.linkProgram(pr);if(!gl.getProgramParameter(pr,gl.LINK_STATUS))return;
   gl.useProgram(pr);
   var b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
@@ -349,33 +357,33 @@ csend.addEventListener('click',function(){
   var tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
   [[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE],[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR]].forEach(function(x){gl.texParameteri(gl.TEXTURE_2D,x[0],x[1])});
-  var uP=gl.getUniformLocation(pr,'P'),uSc=gl.getUniformLocation(pr,'sc'),uA=gl.getUniformLocation(pr,'asp');
+  var uR=gl.getUniformLocation(pr,'R'),uSc=gl.getUniformLocation(pr,'sc'),uA=gl.getUniformLocation(pr,'asp');
   v.parentNode.insertBefore(c,v.nextSibling);
-  var pts=[],buf=new Float32Array(N*4),last=null,lastT=-1,prev=performance.now(),shown=false,dead=false;
+  var rip=[],buf=new Float32Array(N*4),last=null,lastSpawn=0,lastT=-1,shown=false,dead=false;
   function size(){var w=Math.min(innerWidth,1280),k=w/innerWidth;c.width=Math.round(innerWidth*k);c.height=Math.round(innerHeight*k);gl.viewport(0,0,c.width,c.height)}
   size();addEventListener('resize',size);
+  function spawn(u,w,amp){rip.push({x:u,y:w,t0:performance.now(),a:amp});if(rip.length>N)rip.shift()}
   function move(x,y){
     var u=x/innerWidth,w=1-y/innerHeight;
     if(!last){last={x:u,y:w};return}
-    var dx=u-last.x,dy=w-last.y;
-    if(Math.hypot(dx*innerWidth/innerHeight,dy)<STEP)return;
-    pts.push({x:u,y:w,vx:dx*GAIN,vy:dy*GAIN});if(pts.length>N)pts.shift();
-    last={x:u,y:w};
+    var dist=Math.hypot((u-last.x)*innerWidth/innerHeight,w-last.y),now=performance.now();
+    if(dist<STEP||now-lastSpawn<GAP)return;
+    spawn(u,w,Math.min(1,.45+dist*4));last={x:u,y:w};lastSpawn=now;
   }
   addEventListener('mousemove',function(e){move(e.clientX,e.clientY)},{passive:true});
-  addEventListener('touchstart',function(e){var t=e.touches[0];last={x:t.clientX/innerWidth,y:1-t.clientY/innerHeight}},{passive:true});
+  addEventListener('mousedown',function(e){spawn(e.clientX/innerWidth,1-e.clientY/innerHeight,1.2)},{passive:true});
+  addEventListener('touchstart',function(e){var t=e.touches[0],u=t.clientX/innerWidth,w=1-t.clientY/innerHeight;last={x:u,y:w};spawn(u,w,1.2)},{passive:true});
   addEventListener('touchmove',function(e){var t=e.touches[0];move(t.clientX,t.clientY)},{passive:true});
   function frame(now){
     if(dead)return;requestAnimationFrame(frame);
-    var k=Math.pow(DECAY,(now-prev)/16.67);prev=now;
-    pts.forEach(function(p){p.vx*=k;p.vy*=k});
-    pts=pts.filter(function(p){return Math.abs(p.vx)+Math.abs(p.vy)>0.00002});
+    var t=performance.now();
+    rip=rip.filter(function(r){return(t-r.t0)/1000<LIFE});
     if(v.readyState<2)return;
     try{
       if(v.currentTime!==lastT){lastT=v.currentTime;gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,v)}
-      buf.fill(0);pts.forEach(function(p,i){buf.set([p.x,p.y,p.vx,p.vy],i*4)});
+      buf.fill(0);rip.forEach(function(r,i){buf.set([r.x,r.y,(t-r.t0)/1000,r.a],i*4)});
       var va=c.width/c.height,vb=(v.videoWidth||16)/(v.videoHeight||9);
-      gl.uniform4fv(uP,buf);gl.uniform1f(uA,va);
+      gl.uniform4fv(uR,buf);gl.uniform1f(uA,va);
       gl.uniform2f(uSc,va>vb?1:va/vb,va>vb?vb/va:1);
       gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
     }catch(err){dead=true;c.remove();return}
